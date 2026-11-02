@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>혈당도둑</title>
+    <!-- React & Babel CDN -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        ink: '#111111',
+                        canvas: '#ffffff',
+                        'soft-cloud': '#f5f5f5',
+                        mute: '#707072',
+                        hairline: '#cacacb',
+                        'hairline-soft': '#e5e5e5',
+                        sale: '#d30005',
+                        success: '#007d48'
+                    },
+                    fontFamily: {
+                        display: ['"Bebas Neue"', 'sans-serif'],
+                        sans: ['Inter', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #f5f5f5; margin: 0; font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
+        .app-container { max-width: 480px; margin: 0 auto; background: #ffffff; min-height: 100vh; position: relative; padding-bottom: 70px; }
+        ::-webkit-scrollbar { display: none; }
+        .tab-content { animation: fadeIn 0.2s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .btn-press:active { transform: scale(0.96); opacity: 0.8; transition: all 0.1s; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const HomeIcon = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>;
+        const ChatIcon = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>;
+        const UserIcon = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>;
+
+        function App() {
+            const [currentTab, setCurrentTab] = useState('home');
+            
+            const [records, setRecords] = useState([]);
+            const [profile, setProfile] = useState({ age: 24, height: 168, weight: '', waist: '' });
+            const [foodDB, setFoodDB] = useState({
+                good: ['천연발효 사워도우(르방)', '새우장', '연어장', '바질', '닭가슴살', '현미밥'],
+                bad: ['액상과당 음료', '정제탄수화물 빵', '믹스커피', '떡볶이', '과자']
+            });
+            
+            const [analysisFeedback, setAnalysisFeedback] = useState('');
+            const [chatMessages, setChatMessages] = useState([{ sender: 'ai', text: '안녕하세요! 식단과 혈당을 기록해주시면 분석해드릴게요.' }]);
+
+            const [inputType, setInputType] = useState('blood_sugar');
+            const [inputValue, setInputValue] = useState('');
+            const [inputTime, setInputTime] = useState('');
+
+            const handleAddRecord = () => {
+                if (!inputValue || !inputTime) return alert('값과 시간을 모두 입력해주세요.');
+                const newRecord = { id: Date.now(), type: inputType, value: inputValue, time: inputTime, date: new Date().toLocaleDateString() };
+                setRecords([...records, newRecord].sort((a, b) => a.time.localeCompare(b.time)));
+                setInputValue('');
+                setInputTime('');
+            };
+
+            const runAnalysis = () => {
+                const todayRecords = records.filter(r => r.date === new Date().toLocaleDateString());
+                const foods = todayRecords.filter(r => r.type === 'food').map(r => r.value);
+                const sugars = todayRecords.filter(r => r.type === 'blood_sugar').map(r => parseInt(r.value));
+
+                let feedback = "기록된 데이터를 분석했습니다.\n";
+                let hasData = false;
+
+                foods.forEach(food => {
+                    hasData = true;
+                    if (foodDB.good.some(g => food.includes(g))) feedback += `\n✅ 혈당 안정화 식품(${food}) 섭취가 확인됩니다. 좋은 식습관입니다!`;
+                    if (foodDB.bad.some(b => food.includes(b))) feedback += `\n⚠️ 혈당을 급격히 올릴 수 있는 식품(${food})이 포함되어 있습니다. 주의가 필요합니다.`;
+                });
+
+                if (sugars.length > 0) {
+                    hasData = true;
+                    const maxSugar = Math.max(...sugars);
+                    if (maxSugar > 140) feedback += `\n📉 최고 혈당이 ${maxSugar}mg/dL로 다소 높습니다. 식후 걷기를 권장합니다.`;
+                    else feedback += `\n📈 혈당이 안정적인 범위 내에 있습니다.`;
+                }
+
+                if(!hasData) feedback = "오늘 기록된 데이터가 없습니다. 혈당과 식단을 먼저 기록해주세요.";
+
+                setAnalysisFeedback(feedback);
+                setChatMessages([...chatMessages, { sender: 'user', text: '분석해줘' }, { sender: 'ai', text: feedback }]);
+                setCurrentTab('chat');
+            };
+
+            const HomeTab = () => (
+                <div className="tab-content p-6">
+                    <header className="mb-12">
+                        <h1 className="font-display text-6xl uppercase tracking-tight text-ink leading-none">Blood Sugar<br/>Thief</h1>
+                        <p className="text-mute mt-2 font-medium">나만의 혈당 관리 시스템</p>
+                    </header>
+
+                    <div className="mb-12">
+                        <div className="flex space-x-2 mb-6 p-1 bg-soft-cloud rounded-md w-full">
+                            <button onClick={() => setInputType('blood_sugar')} className={`flex-1 py-2 text-sm font-medium rounded-md ${inputType === 'blood_sugar' ? 'bg-canvas text-ink shadow-sm' : 'text-mute'}`}>혈당 기록</button>
+                            <button onClick={() => setInputType('food')} className={`flex-1 py-2 text-sm font-medium rounded-md ${inputType === 'food' ? 'bg-canvas text-ink shadow-sm' : 'text-mute'}`}>식단 기록</button>
+                        </div>
+                        
+                        <div className="space-y-4">
+                            <input type="time" value={inputTime} onChange={e => setInputTime(e.target.value)} className="w-full bg-soft-cloud text-ink font-medium text-lg px-6 py-4 rounded-full outline-none" />
+                            <input type={inputType === 'blood_sugar' ? 'number' : 'text'} placeholder={inputType === 'blood_sugar' ? '혈당 수치 (mg/dL)' : '섭취한 식품 입력'} value={inputValue} onChange={e => setInputValue(e.target.value)} className="w-full bg-soft-cloud text-ink font-medium text-lg px-6 py-4 rounded-full outline-none" />
+                            <button onClick={handleAddRecord} className="w-full bg-ink text-canvas font-medium text-lg px-8 py-4 rounded-full btn-press">기록 추가하기</button>
+                        </div>
+                    </div>
+
+                    <div className="mb-12">
+                        <h2 className="text-2xl font-medium text-ink mb-6">오늘의 타임라인</h2>
+                        <div className="space-y-0 border-t border-hairline">
+                            {records.length === 0 ? <p className="text-mute py-6 text-center">기록이 없습니다.</p> : 
+                             records.map(r => (
+                                <div key={r.id} className="flex justify-between items-center py-4 border-b border-hairline">
+                                    <div>
+                                        <span className="text-sm font-bold text-mute mr-4">{r.time}</span>
+                                        <span className="font-medium text-ink text-lg">{r.value}{r.type === 'blood_sugar' ? ' mg/dL' : ''}</span>
+                                    </div>
+                                    <span className={`text-xs px-3 py-1 rounded-full ${r.type === 'blood_sugar' ? 'bg-sale/10 text-sale' : 'bg-success/10 text-success'}`}>
+                                        {r.type === 'blood_sugar' ? '혈당' : '식단'}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="flex space-x-2">
+                        <button onClick={runAnalysis} className="flex-1 bg-ink text-canvas font-medium text-lg px-4 py-4 rounded-full btn-press">AI 분석하기</button>
+                        <button onClick={() => setCurrentTab('chat')} className="flex-1 bg-soft-cloud text-ink font-medium text-lg px-4 py-4 rounded-full btn-press">조언듣기</button>
+                    </div>
+                </div>
+            );
+
+            const ChatTab = () => (
+                <div className="tab-content flex flex-col h-[calc(100vh-70px)] bg-soft-cloud">
+                    <div className="bg-canvas p-6 border-b border-hairline-soft sticky top-0 z-10">
+                        <h2 className="text-2xl font-medium text-ink">AI 조언</h2>
+                    </div>
+                    <div className="flex-1 p-6 overflow-y-auto space-y-6">
+                        {chatMessages.map((msg, i) => (
+                            <div key={i} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                <div className={`px-6 py-4 rounded-[24px] max-w-[85%] whitespace-pre-wrap font-medium leading-relaxed ${msg.sender === 'user' ? 'bg-ink text-canvas rounded-br-sm' : 'bg-canvas text-ink border border-hairline-soft rounded-bl-sm'}`}>
+                                    {msg.text}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+
+            const MyPageTab = () => {
+                const [newGood, setNewGood] = useState('');
+                const [newBad, setNewBad] = useState('');
+
+                const addFood = (type) => {
+                    if (type === 'good' && newGood) { setFoodDB({...foodDB, good: [...foodDB.good, newGood]}); setNewGood(''); }
+                    if (type === 'bad' && newBad) { setFoodDB({...foodDB, bad: [...foodDB.bad, newBad]}); setNewBad(''); }
+                };
+
+                return (
+                    <div className="tab-content p-6">
+                        <h2 className="font-display text-5xl uppercase tracking-tight text-ink mb-8">My Page</h2>
+                        
+                        <div className="space-y-6 mb-12">
+                            <h3 className="text-xl font-medium text-ink border-b border-ink pb-2">개인정보 설정</h3>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div><label className="text-sm font-bold text-mute ml-2">나이</label><input type="number" value={profile.age} onChange={e=>setProfile({...profile, age: e.target.value})} className="w-full bg-soft-cloud text-ink font-medium px-4 py-3 rounded-md outline-none mt-1" /></div>
+                                <div><label className="text-sm font-bold text-mute ml-2">키 (cm)</label><input type="number" value={profile.height} onChange={e=>setProfile({...profile, height: e.target.value})} className="w-full bg-soft-cloud text-ink font-medium px-4 py-3 rounded-md outline-none mt-1" /></div>
+                                <div><label className="text-sm font-bold text-mute ml-2">체중 (kg)</label><input type="number" value={profile.weight} onChange={e=>setProfile({...profile, weight: e.target.value})} className="w-full bg-soft-cloud text-ink font-medium px-4 py-3 rounded-md outline-none mt-1" /></div>
+                                <div><label className="text-sm font-bold text-mute ml-2">허리둘레 (cm)</label><input type="number" value={profile.waist} onChange={e=>setProfile({...profile, waist: e.target.value})} className="w-full bg-soft-cloud text-ink font-medium px-4 py-3 rounded-md outline-none mt-1" /></div>
+                            </div>
+                        </div>
+
+                        <div className="space-y-8">
+                            <h3 className="text-xl font-medium text-ink border-b border-ink pb-2">식품 데이터베이스 관리</h3>
+                            
+                            <div>
+                                <h4 className="font-medium text-success mb-3 flex items-center">🟢 안정화 식품 (Good)</h4>
+                                <div className="flex flex-wrap gap-2 mb-3">
+                                    {foodDB.good.map((food, i) => <span key={i} className="bg-canvas border border-hairline px-4 py-2 rounded-full text-sm font-medium text-ink">{food}</span>)}
+                                </div>
+                                <div className="flex space-x-2">
+                                    <input value={newGood} onChange={e=>setNewGood(e.target.value)} placeholder="식품 추가" className="flex-1 bg-soft-cloud px-4 py-2 rounded-full text-sm outline-none" />
+                                    <button onClick={() => addFood('good')} className="bg-ink text-canvas px-4 rounded-full text-sm font-medium">추가</button>
+                                </div>
+                            </div>
+
+                            <div>
+                                <h4 className="font-medium text-sale mb-3 flex items-center">🔴 상승 식품 (Bad)</h4>
+                                <div className="flex flex-wrap gap-2 mb-3">
+                                    {foodDB.bad.map((food, i) => <span key={i} className="bg-canvas border border-hairline px-4 py-2 rounded-full text-sm font-medium text-ink">{food}</span>)}
+                                </div>
+                                <div className="flex space-x-2">
+                                    <input value={newBad} onChange={e=>setNewBad(e.target.value)} placeholder="식품 추가" className="flex-1 bg-soft-cloud px-4 py-2 rounded-full text-sm outline-none" />
+                                    <button onClick={() => addFood('bad')} className="bg-ink text-canvas px-4 rounded-full text-sm font-medium">추가</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="app-container">
+                    <main>
+                        {currentTab === 'home' && <HomeTab />}
+                        {currentTab === 'chat' && <ChatTab />}
+                        {currentTab === 'mypage' && <MyPageTab />}
+                    </main>
+
+                    <nav className="fixed bottom-0 w-full max-w-[480px] bg-canvas border-t border-hairline-soft flex justify-around items-center h-[70px] z-50">
+                        <button onClick={() => setCurrentTab('home')} className={`flex flex-col items-center justify-center w-full h-full ${currentTab === 'home' ? 'text-ink' : 'text-mute'}`}>
+                            <HomeIcon />
+                            <span className="text-[10px] font-bold mt-1 uppercase">Home</span>
+                        </button>
+                        <button onClick={() => setCurrentTab('chat')} className={`flex flex-col items-center justify-center w-full h-full ${currentTab === 'home' ? 'text-mute' : (currentTab === 'chat' ? 'text-ink' : 'text-mute')}`}>
+                            <ChatIcon />
+                            <span className="text-[10px] font-bold mt-1 uppercase">AI Chat</span>
+                        </button>
+                        <button onClick={() => setCurrentTab('mypage')} className={`flex flex-col items-center justify-center w-full h-full ${currentTab === 'mypage' ? 'text-ink' : 'text-mute'}`}>
+                            <UserIcon />
+                            <span className="text-[10px] font-bold mt-1 uppercase">My Page</span>
+                        </button>
+                    </nav>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
