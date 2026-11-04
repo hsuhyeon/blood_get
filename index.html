@@ -38,7 +38,6 @@
     <style>
         body { background-color: #e5e5e5; margin: 0; font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
         .app-wrapper { display: flex; justify-content: center; min-height: 100vh; }
-        /* UI 가변성(Responsive) 해결: max-width를 768px(3xl)로 확장하여 태블릿/PC에서도 시원하게 꽉 차도록 변경 */
         .app-container { width: 100%; max-width: 768px; background: #ffffff; min-height: 100vh; position: relative; padding-bottom: 70px; box-shadow: 0 0 20px rgba(0,0,0,0.05); display: flex; flex-direction: column; }
         ::-webkit-scrollbar { display: none; }
         .tab-content { animation: fadeIn 0.2s ease-in-out; flex: 1; display: flex; flex-direction: column; }
@@ -64,24 +63,25 @@
             return saved ? JSON.parse(saved) : defaultData;
         };
 
+        const MEAL_TYPES = ['아침', '오전 간식', '점심', '오후 간식', '저녁', '야식'];
+
         function App() {
             const [currentTab, setCurrentTab] = useState('home');
             
-            // 전역 상태
-            const [records, setRecords] = useState(() => loadData('bst_records', []));
-            const [profile, setProfile] = useState(() => loadData('bst_profile', { age: 24, height: 168, weight: '', waist: '' }));
-            const [foodDB, setFoodDB] = useState(() => loadData('bst_foodDB', {
-                good: ['천연발효 사워도우', '사워도우', '르방', '새우장', '연어장', '바질', '닭가슴살', '현미밥', '채소', '토마토'],
-                bad: ['액상과당', '음료', '빵', '믹스커피', '떡볶이', '과자', '아이스크림', '당']
+            // 전역 상태 (새로운 키 버전으로 충돌 방지)
+            const [records, setRecords] = useState(() => loadData('bst_food_records', []));
+            const [profile, setProfile] = useState(() => loadData('bst_profile_v2', { age: 24, height: 168, weight: '' }));
+            const [foodDB, setFoodDB] = useState(() => loadData('bst_foodDB_v2', {
+                good: ['천연발효 사워도우', '사워도우', '르방', '새우장', '연어장', '바질', '닭가슴살', '현미밥', '채소', '토마토', '계란', '오이'],
+                bad: ['액상과당', '음료', '빵', '믹스커피', '떡볶이', '과자', '아이스크림', '당', '초콜릿', '라면']
             }));
-            const [chatMessages, setChatMessages] = useState(() => loadData('bst_chat', [
-                { sender: 'ai', text: '안녕하세요! 식단과 혈당을 기록하시고 [데이터 분석]을 누르시면, 혈당 상승 원인을 비교해서 알려드릴게요.' }
+            const [chatMessages, setChatMessages] = useState(() => loadData('bst_chat_v2', [
+                { sender: 'ai', text: '안녕하세요! 매 끼니마다 식단을 기록해주시면, 혈당 개선에 좋은 음식인지 분석하고 조언해 드릴게요 😊' }
             ]));
 
             // 입력 폼 상태
-            const [inputType, setInputType] = useState('blood_sugar');
+            const [mealType, setMealType] = useState('아침');
             const [inputValue, setInputValue] = useState('');
-            const [inputTime, setInputTime] = useState('');
             const [chatInput, setChatInput] = useState('');
             const [newGood, setNewGood] = useState('');
             const [newBad, setNewBad] = useState('');
@@ -92,10 +92,10 @@
 
             // 데이터 자동 백업
             useEffect(() => {
-                localStorage.setItem('bst_records', JSON.stringify(records));
-                localStorage.setItem('bst_profile', JSON.stringify(profile));
-                localStorage.setItem('bst_foodDB', JSON.stringify(foodDB));
-                localStorage.setItem('bst_chat', JSON.stringify(chatMessages));
+                localStorage.setItem('bst_food_records', JSON.stringify(records));
+                localStorage.setItem('bst_profile_v2', JSON.stringify(profile));
+                localStorage.setItem('bst_foodDB_v2', JSON.stringify(foodDB));
+                localStorage.setItem('bst_chat_v2', JSON.stringify(chatMessages));
                 
                 setSaveToast(true);
                 const timer = setTimeout(() => setSaveToast(false), 1500);
@@ -112,94 +112,69 @@
             // --- 홈 탭 기능 (추가/수정/삭제) ---
             const handleAddRecord = (e) => {
                 e.preventDefault();
-                if (!inputValue || !inputTime) return alert('값과 시간을 모두 입력해주세요.');
+                if (!inputValue) return alert('섭취한 식단을 입력해주세요.');
                 
-                const newRecord = { id: Date.now(), type: inputType, value: inputValue, time: inputTime, date: new Date().toLocaleDateString() };
-                setRecords([...records, newRecord].sort((a, b) => a.time.localeCompare(b.time)));
+                const newRecord = { 
+                    id: Date.now(), 
+                    mealType: mealType, 
+                    value: inputValue, 
+                    date: new Date().toLocaleDateString(),
+                    timestamp: new Date().getTime()
+                };
+                
+                // 시간순 정렬 대신 입력된 순서(id/timestamp) 기반 유지
+                setRecords([...records, newRecord].sort((a, b) => a.timestamp - b.timestamp));
                 
                 setInputValue('');
                 if (inputRef.current) inputRef.current.focus();
             };
 
             const editRecord = (record) => {
-                setInputType(record.type);
+                setMealType(record.mealType);
                 setInputValue(record.value);
-                setInputTime(record.time);
-                // 기존 기록 지우고 폼으로 끌어올림 (저장 누르면 갱신)
                 setRecords(records.filter(r => r.id !== record.id));
                 window.scrollTo({ top: 0, behavior: 'smooth' });
                 if (inputRef.current) inputRef.current.focus();
             };
 
             const deleteRecord = (id) => {
-                if(window.confirm('이 기록을 삭제하시겠습니까?')) {
+                if(window.confirm('이 식단 기록을 삭제하시겠습니까?')) {
                     setRecords(records.filter(r => r.id !== id));
                 }
             };
 
-            // --- 시간대별 섭취 음식 기반 혈당 상승 인과관계 분석 로직 ---
+            // --- 식단 기반 혈당 개선 조언(AI 분석) ---
             const runAnalysis = () => {
                 const todayRecords = records.filter(r => r.date === new Date().toLocaleDateString());
-                const foods = todayRecords.filter(r => r.type === 'food').sort((a, b) => a.time.localeCompare(b.time));
-                const sugars = todayRecords.filter(r => r.type === 'blood_sugar').sort((a, b) => a.time.localeCompare(b.time));
 
-                let feedback = "📊 오늘의 혈당 및 식단 비교 분석 결과입니다.\n\n";
-
-                if (sugars.length === 0 && foods.length === 0) {
-                    setChatMessages([...chatMessages, { sender: 'user', text: '혈당과 식단을 비교 분석해줘' }, { sender: 'ai', text: "오늘 기록된 데이터가 없습니다. 홈 화면에서 혈당과 식단을 먼저 기록해주세요." }]);
+                if (todayRecords.length === 0) {
+                    setChatMessages([...chatMessages, { sender: 'user', text: '오늘 내 식단 어때?' }, { sender: 'ai', text: "오늘 기록된 식단이 없습니다. 홈 화면에서 먼저 식단을 기록해주세요!" }]);
                     setCurrentTab('chat');
                     return;
                 }
 
-                if (sugars.length > 0) {
-                    sugars.forEach(sugar => {
-                        const sugarVal = parseInt(sugar.value);
-                        
-                        if (sugarVal > 140) {
-                            feedback += `📉 [${sugar.time}] 혈당이 ${sugarVal}mg/dL로 상승했습니다.\n`;
-                            
-                            // 해당 혈당 측정 시간 '이전'에 먹은 음식 찾기
-                            const eatenBefore = foods.filter(f => f.time <= sugar.time);
-                            let foundBad = false;
-                            
-                            if(eatenBefore.length > 0) {
-                                eatenBefore.forEach(f => {
-                                    if (foodDB.bad.some(b => f.value.includes(b))) {
-                                        feedback += `   👉 원인: ${f.time}에 섭취한 [${f.value}]이(가) 급격한 혈당 상승의 주요 원인입니다. 데이터베이스에 주의 식품으로 등록되어 있습니다.\n`;
-                                        foundBad = true;
-                                    }
-                                });
-                                if(!foundBad) {
-                                    feedback += `   👉 원인 미상: 측정 이전 섭취 기록 중 DB상 상승 유발 식품은 없으나, 숨겨진 당이 있거나 식사량 자체가 많았을 수 있습니다.\n`;
-                                }
-                            } else {
-                                feedback += `   👉 주의: 상승 원인이 될 만한 식단 기록이 이전에 없습니다. 공복 스트레스나 수면 부족을 점검해보세요.\n`;
-                            }
-                            feedback += "\n";
-                        } else {
-                            feedback += `📈 [${sugar.time}] 혈당 ${sugarVal}mg/dL : 안정적입니다.\n`;
-                            const eatenBefore = foods.filter(f => f.time <= sugar.time);
-                            eatenBefore.forEach(f => {
-                                if (foodDB.good.some(g => f.value.includes(g))) {
-                                    feedback += `   👉 안정화 요인: ${f.time}에 섭취한 [${f.value}]이(가) 혈당 방어에 좋은 역할을 했습니다!\n`;
-                                }
-                            });
-                            feedback += "\n";
-                        }
-                    });
-                } else {
-                    feedback += "혈당 기록이 없어 식단 위주로 분석합니다.\n";
-                    foods.forEach(f => {
-                        if (foodDB.bad.some(b => f.value.includes(b))) feedback += `⚠️ [${f.time}] [${f.value}] 섭취: 혈당 스파이크를 유발할 수 있으니 주의하세요.\n`;
-                        else if (foodDB.good.some(g => f.value.includes(g))) feedback += `✅ [${f.time}] [${f.value}] 섭취: 안정화에 도움을 주는 좋은 선택입니다!\n`;
-                    });
-                }
+                let feedback = "오늘 드신 식단들을 살펴봤어요! 🍽️\n\n";
 
-                setChatMessages([...chatMessages, { sender: 'user', text: '혈당이 오른 이유를 섭취한 음식과 비교 분석해서 알려줘' }, { sender: 'ai', text: feedback.trim() }]);
+                todayRecords.forEach(r => {
+                    let isBad = foodDB.bad.some(b => r.value.includes(b));
+                    let isGood = foodDB.good.some(g => r.value.includes(g));
+
+                    if (isBad) {
+                        feedback += `[${r.mealType}] ${r.value} ⚠️\n혈당을 빠르게 올릴 수 있는 음식이에요. 인슐린 저항성을 높일 수 있으니, 다음 식사때는 식이섬유가 풍부한 채소류를 먼저 섭취하는 걸 추천드려요.\n\n`;
+                    } else if (isGood) {
+                        feedback += `[${r.mealType}] ${r.value} ✅\n혈당 방어와 안정화에 아주 좋은 선택입니다! 이렇게 관리하시면 혈당 다이어트에도 큰 도움이 됩니다. 훌륭해요!\n\n`;
+                    } else {
+                        feedback += `[${r.mealType}] ${r.value} 🍽️\n무난한 식단입니다. 과식하지 않도록 양 조절에만 신경 써주시면 완벽해요.\n\n`;
+                    }
+                });
+
+                feedback += "식단 관리하시면서 유혹을 참기 힘들거나, 특정 음식이 혈당에 어떨지 궁금하시다면 언제든 편하게 물어보세요!";
+
+                setChatMessages([...chatMessages, { sender: 'user', text: '오늘 내 식단 분석해줘' }, { sender: 'ai', text: feedback.trim() }]);
                 setCurrentTab('chat');
             };
 
-            // --- 채팅 로직 ---
+            // --- 채팅 로직 (식단 감성 피드백 특화) ---
             const handleChatSubmit = (e) => {
                 e.preventDefault();
                 if(!chatInput.trim()) return;
@@ -209,13 +184,14 @@
                 setChatInput('');
 
                 setTimeout(() => {
-                    let aiResponse = "꾸준히 기록하시려는 모습이 정말 멋집니다. 식단이나 관리 중에 불편한 점이 있다면 언제든 이야기해주세요.";
-                    if(userText.includes('힘들') || userText.includes('스트레스') || userText.includes('포기')) {
-                        aiResponse = "매일 철저하게 식단을 관리하는 건 누구에게나 정말 고된 일이에요. 너무 완벽하려고 하기보다는, 오늘 하루 쯤은 스스로를 칭찬하며 좋아하는 음식을 조금 드셔도 괜찮습니다. 지치지 않는 게 가장 중요하니까요!";
-                    } else if(userText.includes('배고') || userText.includes('출출') || userText.includes('야식')) {
-                        aiResponse = "정말 힘드시다면 무작정 참는 것보다 오이, 방울토마토, 구운 계란 1개 정도를 천천히 드시는 걸 추천해요. 따뜻한 차 한 잔도 도움이 됩니다.";
-                    } else if(userText.includes('고민')) {
-                        aiResponse = "어떤 고민이신가요? 몸무게 정체기이신가요, 아니면 자꾸 당이 떨어지는 기분이 드시나요? 편하게 말씀해주세요.";
+                    let aiResponse = "기록을 꼼꼼히 하시는 모습이 정말 멋져요. 다른 궁금한 음식이나 힘든 점이 있다면 편하게 이야기해주세요.";
+                    
+                    if(userText.includes('힘들') || userText.includes('스트레스') || userText.includes('포기') || userText.includes('짜증')) {
+                        aiResponse = "매 끼니 식단을 관리하고 신경 쓰는 건 정말 고되고 스트레스 받는 일이에요. 완벽하려고 너무 자책하지 마세요. 오늘 하루쯤은 스스로를 다독이며 평소 좋아하시던 음식을 조금 드셔도 괜찮습니다. 지치지 않고 길게 가는 게 가장 중요하니까요!";
+                    } else if(userText.includes('배고') || userText.includes('출출') || userText.includes('야식') || userText.includes('먹고싶')) {
+                        aiResponse = "정말 참기 힘드시군요! 그럴 땐 무작정 참기보다는 혈당을 급격히 올리지 않는 오이, 토마토, 혹은 구운 계란 1개 정도를 천천히 드시는 걸 추천해요. 따뜻한 허브티 한 잔도 식욕을 달래는 데 큰 도움이 됩니다.";
+                    } else if(userText.includes('어때') || userText.includes('괜찮')) {
+                        aiResponse = "음식에 따라 다르지만, 가공되지 않은 자연식품 위주라면 대부분 괜찮습니다! 정제 탄수화물(밀가루, 흰쌀)이나 당류가 많이 포함된 음식만 주의하시면 충분히 잘하고 계신 거예요.";
                     }
                     setChatMessages(prev => [...prev, { sender: 'ai', text: aiResponse }]);
                 }, 800);
@@ -235,51 +211,58 @@
             // --- 화면 렌더링 ---
             const renderHomeTab = () => (
                 <div className="tab-content p-6 overflow-y-auto">
-                    <header className="mb-10 pt-4 flex justify-between items-start">
+                    <header className="mb-8 pt-4 flex justify-between items-start">
                         <div>
                             <h1 className="font-display text-6xl uppercase tracking-tight text-ink leading-none">Blood Sugar<br/>Thief</h1>
-                            <p className="text-mute mt-2 font-medium">나만의 혈당 관리 시스템</p>
+                            <p className="text-mute mt-2 font-medium">끼니별 식단 기록 및 AI 관리 코치</p>
                         </div>
                     </header>
 
                     <div className="mb-10">
-                        <div className="flex space-x-2 mb-6 p-1 bg-soft-cloud rounded-md w-full">
-                            <button onClick={() => {setInputType('blood_sugar'); if(inputRef.current) inputRef.current.focus();}} className={`flex-1 py-2 text-sm font-medium rounded-md ${inputType === 'blood_sugar' ? 'bg-canvas text-ink shadow-sm' : 'text-mute'}`}>혈당 기록</button>
-                            <button onClick={() => {setInputType('food'); if(inputRef.current) inputRef.current.focus();}} className={`flex-1 py-2 text-sm font-medium rounded-md ${inputType === 'food' ? 'bg-canvas text-ink shadow-sm' : 'text-mute'}`}>식단 기록</button>
+                        <div className="mb-4">
+                            <label className="text-sm font-bold text-ink mb-3 block">어느 끼니인가요?</label>
+                            <div className="flex flex-wrap gap-2">
+                                {MEAL_TYPES.map(meal => (
+                                    <button 
+                                        key={meal} 
+                                        type="button" 
+                                        onClick={() => { setMealType(meal); if(inputRef.current) inputRef.current.focus(); }}
+                                        className={`px-4 py-2.5 rounded-full text-sm font-medium transition-colors ${mealType === meal ? 'bg-ink text-canvas shadow-md' : 'bg-canvas border border-hairline text-mute hover:border-ink hover:text-ink'}`}
+                                    >
+                                        {meal}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                         
                         <form onSubmit={handleAddRecord} className="space-y-4">
-                            <input type="time" value={inputTime} onChange={e => setInputTime(e.target.value)} required className="w-full bg-soft-cloud text-ink font-medium text-lg px-6 py-4 rounded-full outline-none focus:ring-2 focus:ring-hairline" />
                             <input 
                                 ref={inputRef}
-                                type={inputType === 'blood_sugar' ? 'number' : 'text'} 
-                                placeholder={inputType === 'blood_sugar' ? '혈당 수치 (mg/dL)' : '섭취한 식품 입력 (예: 떡볶이)'} 
+                                type="text" 
+                                placeholder="섭취한 음식 입력 (예: 닭가슴살 샐러드)" 
                                 value={inputValue} 
                                 onChange={e => setInputValue(e.target.value)} 
                                 required
                                 className="w-full bg-soft-cloud text-ink font-medium text-lg px-6 py-4 rounded-full outline-none focus:ring-2 focus:ring-hairline" 
                             />
-                            <button type="submit" className="w-full bg-ink text-canvas font-medium text-lg px-8 py-4 rounded-full btn-press">기록 저장하기</button>
+                            <button type="submit" className="w-full bg-ink text-canvas font-medium text-lg px-8 py-4 rounded-full btn-press">식단 기록하기</button>
                         </form>
                     </div>
 
                     <div className="mb-10">
-                        <h2 className="text-2xl font-medium text-ink mb-6">오늘의 타임라인</h2>
+                        <h2 className="text-2xl font-medium text-ink mb-6">오늘의 식사 타임라인</h2>
                         <div className="space-y-0 border-t border-hairline">
                             {records.filter(r => r.date === new Date().toLocaleDateString()).length === 0 ? 
-                             <p className="text-mute py-6 text-center">기록이 없습니다.</p> : 
+                             <p className="text-mute py-6 text-center">아직 기록된 식단이 없습니다.</p> : 
                              records.filter(r => r.date === new Date().toLocaleDateString()).map(r => (
                                 <div key={r.id} className="flex justify-between items-center py-4 border-b border-hairline group">
                                     <div className="flex-1">
-                                        <span className="text-sm font-bold text-mute mr-4">{r.time}</span>
-                                        <span className="font-medium text-ink text-lg">{r.value}{r.type === 'blood_sugar' ? ' mg/dL' : ''}</span>
-                                        <span className={`ml-3 text-xs px-2 py-0.5 rounded-full inline-block ${r.type === 'blood_sugar' ? 'bg-sale/10 text-sale' : 'bg-success/10 text-success'}`}>
-                                            {r.type === 'blood_sugar' ? '혈당' : '식단'}
-                                        </span>
+                                        <span className="text-[13px] bg-soft-cloud px-3 py-1 rounded-full font-bold text-ink mr-3 inline-block w-20 text-center">{r.mealType}</span>
+                                        <span className="font-medium text-ink text-[17px]">{r.value}</span>
                                     </div>
-                                    <div className="flex space-x-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                                        <button onClick={() => editRecord(r)} className="text-[13px] bg-soft-cloud text-ink font-medium px-3 py-1.5 rounded-full hover:bg-hairline-soft">수정</button>
-                                        <button onClick={() => deleteRecord(r.id)} className="text-[13px] bg-sale/10 text-sale font-medium px-3 py-1.5 rounded-full hover:bg-sale hover:text-canvas">삭제</button>
+                                    <div className="flex space-x-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity ml-2">
+                                        <button onClick={() => editRecord(r)} className="text-[13px] bg-canvas border border-hairline text-ink font-medium px-3 py-1.5 rounded-full hover:bg-soft-cloud whitespace-nowrap">수정</button>
+                                        <button onClick={() => deleteRecord(r.id)} className="text-[13px] bg-sale/10 text-sale font-medium px-3 py-1.5 rounded-full hover:bg-sale hover:text-canvas whitespace-nowrap">삭제</button>
                                     </div>
                                 </div>
                             ))}
@@ -287,7 +270,7 @@
                     </div>
 
                     <div className="pb-6">
-                        <button onClick={runAnalysis} className="w-full bg-ink text-canvas font-medium text-lg px-4 py-4 rounded-full btn-press">데이터 분석</button>
+                        <button onClick={runAnalysis} className="w-full bg-ink text-canvas font-medium text-lg px-4 py-4 rounded-full btn-press">AI 식단 분석받기</button>
                     </div>
                 </div>
             );
@@ -295,13 +278,13 @@
             const renderChatTab = () => (
                 <div className="tab-content relative bg-soft-cloud flex flex-col" style={{ height: 'calc(100vh - 70px)' }}>
                     <div className="bg-canvas p-6 border-b border-hairline-soft sticky top-0 z-10 flex justify-between items-center">
-                        <h2 className="text-2xl font-medium text-ink">AI 조언 & 상담</h2>
+                        <h2 className="text-2xl font-medium text-ink">AI 식단 코치</h2>
                     </div>
                     
                     <div className="flex-1 p-6 overflow-y-auto space-y-6 chat-scroll pb-24">
                         {chatMessages.map((msg, i) => (
                             <div key={i} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                <div className={`px-6 py-4 rounded-[24px] max-w-[85%] whitespace-pre-wrap font-medium leading-relaxed text-[15px] ${msg.sender === 'user' ? 'bg-ink text-canvas rounded-br-sm' : 'bg-canvas text-ink border border-hairline-soft rounded-bl-sm shadow-sm'}`}>
+                                <div className={`px-5 py-4 rounded-[24px] max-w-[85%] whitespace-pre-wrap font-medium leading-relaxed text-[15px] ${msg.sender === 'user' ? 'bg-ink text-canvas rounded-br-sm' : 'bg-canvas text-ink border border-hairline-soft rounded-bl-sm shadow-sm'}`}>
                                     {msg.text}
                                 </div>
                             </div>
@@ -314,7 +297,7 @@
                             type="text" 
                             value={chatInput} 
                             onChange={(e) => setChatInput(e.target.value)} 
-                            placeholder="고민이나 힘든 점을 편하게 말해주세요..." 
+                            placeholder="식단에 대한 고민을 편하게 물어보세요..." 
                             className="flex-1 bg-soft-cloud text-ink px-6 py-3 rounded-full outline-none font-medium placeholder-mute focus:ring-2 focus:ring-hairline-soft"
                         />
                         <button type="submit" className="bg-ink text-canvas p-3 rounded-full flex items-center justify-center btn-press">
@@ -336,8 +319,7 @@
                         <div className="grid grid-cols-2 gap-4">
                             <div><label className="text-sm font-bold text-mute ml-2">나이</label><input type="number" value={profile.age} onChange={e=>setProfile({...profile, age: e.target.value})} className="w-full bg-soft-cloud text-ink font-medium px-4 py-3 rounded-md outline-none mt-1" /></div>
                             <div><label className="text-sm font-bold text-mute ml-2">키 (cm)</label><input type="number" value={profile.height} onChange={e=>setProfile({...profile, height: e.target.value})} className="w-full bg-soft-cloud text-ink font-medium px-4 py-3 rounded-md outline-none mt-1" /></div>
-                            <div><label className="text-sm font-bold text-mute ml-2">체중 (kg)</label><input type="number" value={profile.weight} placeholder="입력" onChange={e=>setProfile({...profile, weight: e.target.value})} className="w-full bg-soft-cloud text-ink font-medium px-4 py-3 rounded-md outline-none mt-1" /></div>
-                            <div><label className="text-sm font-bold text-mute ml-2">허리둘레 (cm)</label><input type="number" value={profile.waist} placeholder="입력" onChange={e=>setProfile({...profile, waist: e.target.value})} className="w-full bg-soft-cloud text-ink font-medium px-4 py-3 rounded-md outline-none mt-1" /></div>
+                            <div><label className="text-sm font-bold text-mute ml-2">목표 체중 (kg)</label><input type="number" value={profile.weight} placeholder="입력" onChange={e=>setProfile({...profile, weight: e.target.value})} className="w-full bg-soft-cloud text-ink font-medium px-4 py-3 rounded-md outline-none mt-1" /></div>
                         </div>
                     </div>
 
@@ -345,7 +327,7 @@
                         <h3 className="text-xl font-medium text-ink border-b border-hairline pb-3">식품 데이터베이스 관리</h3>
                         
                         <div>
-                            <h4 className="font-medium text-success mb-3 flex items-center text-[15px]">🟢 혈당 안정화 식품</h4>
+                            <h4 className="font-medium text-success mb-3 flex items-center text-[15px]">🟢 혈당 개선(안정화) 식품</h4>
                             <div className="flex flex-wrap gap-2 mb-4">
                                 {foodDB.good.map((food, i) => (
                                     <span key={i} onClick={() => deleteFood('good', food)} className="bg-canvas border border-hairline px-3 py-1.5 rounded-full text-[13px] font-medium text-ink cursor-pointer hover:bg-sale hover:text-canvas hover:border-sale transition-colors group">
@@ -354,13 +336,13 @@
                                 ))}
                             </div>
                             <form onSubmit={(e) => addFood('good', e)} className="flex space-x-2">
-                                <input value={newGood} onChange={e=>setNewGood(e.target.value)} placeholder="안정화 식품 직접 추가" className="flex-1 bg-soft-cloud px-5 py-3 rounded-full text-sm outline-none font-medium focus:ring-2 focus:ring-success" />
+                                <input value={newGood} onChange={e=>setNewGood(e.target.value)} placeholder="좋은 식품 직접 추가" className="flex-1 bg-soft-cloud px-5 py-3 rounded-full text-sm outline-none font-medium focus:ring-2 focus:ring-success" />
                                 <button type="submit" className="bg-ink text-canvas px-6 rounded-full text-sm font-medium btn-press">추가</button>
                             </form>
                         </div>
 
                         <div>
-                            <h4 className="font-medium text-sale mb-3 flex items-center text-[15px]">🔴 혈당 상승 주의 식품</h4>
+                            <h4 className="font-medium text-sale mb-3 flex items-center text-[15px]">🔴 주의해야 할 식품</h4>
                             <div className="flex flex-wrap gap-2 mb-4">
                                 {foodDB.bad.map((food, i) => (
                                     <span key={i} onClick={() => deleteFood('bad', food)} className="bg-canvas border border-hairline px-3 py-1.5 rounded-full text-[13px] font-medium text-ink cursor-pointer hover:bg-sale hover:text-canvas hover:border-sale transition-colors group">
@@ -390,7 +372,6 @@
                         {currentTab === 'mypage' && renderMyPageTab()}
                     </main>
 
-                    {/* 하단 네비게이션도 768px 가변 컨테이너 너비와 일치하도록 수정 */}
                     <nav className="absolute bottom-0 w-full max-w-[768px] bg-canvas border-t border-hairline-soft flex justify-around items-center h-[70px] z-50">
                         <button onClick={() => setCurrentTab('home')} className={`flex flex-col items-center justify-center w-full h-full ${currentTab === 'home' ? 'text-ink' : 'text-mute hover:text-ink'}`}>
                             <HomeIcon />
